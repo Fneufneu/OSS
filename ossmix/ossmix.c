@@ -18,7 +18,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#ifdef HAVE_SYS_SOUNDCARD_H
+#include <sys/soundcard.h>
+#else
 #include <soundcard.h>
+#endif
 #include <sys/ioctl.h>
 #ifndef LOCAL_BUILD
 #include <local_config.h>
@@ -158,6 +162,7 @@ verbose_devinfo (int dev)
 	  printf ("  Current value=0x%04x\n", val.value);
 	  break;
 
+#ifdef MIXT_STEREOSLIDER16
 	case MIXT_STEREOSLIDER16:
 	  printf ("Stereo slider: '%s' (%s), parent=%d, max=%d, flags=0x%x",
 		  thisrec->id, thisrec->extname, thisrec->parent,
@@ -166,6 +171,7 @@ verbose_devinfo (int dev)
 	    perror ("SNDCTL_MIX_READ(stereo)");
 	  printf ("  Current value=0x%08x\n", val.value);
 	  break;
+#endif
 
 	case MIXT_3D:
 	  printf ("3D control: '%s' (%s), parent=%d, max=%d, flags=0x%x",
@@ -187,7 +193,9 @@ verbose_devinfo (int dev)
 	  break;
 
 	case MIXT_MONOSLIDER:
+#ifdef MIXT_MONOSLIDER16
 	case MIXT_MONOSLIDER16:
+#endif
 	case MIXT_SLIDER:
 	case MIXT_MONODB:
 	  printf ("Mono slider: '%s' (%s), parent=%d, max=%d, flags=0x%x",
@@ -208,7 +216,9 @@ verbose_devinfo (int dev)
 	  break;
 
 	case MIXT_ONOFF:
+#ifdef MIXT_MUTE
 	case MIXT_MUTE:
+#endif
 	  printf ("On/off switch: '%s' (%s), parent=%d, flags=0x%x",
 		  thisrec->id, thisrec->extname, thisrec->parent,
 		  thisrec->flags);
@@ -444,13 +454,16 @@ show_devinfo (int dev)
 	  continue;
 	  break;
 
+#ifdef MIXT_STEREOSLIDER16
 	case MIXT_STEREOSLIDER16:
 	  shift = 16; mask = 0xffff;
+#endif
 	case MIXT_STEREOSLIDER:
 	case MIXT_STEREODB:
 	  printf ("%s [<leftvol>:<rightvol>]", thisrec->extname);
 	  if (ioctl (mixerfd, SNDCTL_MIX_READ, &val) == -1)
 	    perror ("SNDCTL_MIX_READ(stereo2)");
+#ifdef MIXF_CENTIBEL
 	  if (thisrec->flags & MIXF_CENTIBEL)
 	    {
 	      vl = val.value & mask;
@@ -459,6 +472,7 @@ show_devinfo (int dev)
 		      vr / 10, vr % 10);
 	    }
 	  else
+#endif
 	    printf (" (currently %d:%d)", val.value & mask,
 		    (val.value >> shift) & mask);
 	  if ((*thisrec->id != '\0') &&
@@ -506,19 +520,23 @@ show_devinfo (int dev)
 
 	case MIXT_SLIDER:
 	  mask = ~0;
+#ifdef MIXT_MONOSLIDER16
 	case MIXT_MONOSLIDER16:
 	  if (thisrec->type == MIXT_MONOSLIDER16) mask = 0xffff;
+#endif
 	case MIXT_MONOSLIDER:
 	case MIXT_MONODB:
 	  printf ("%s <monovol>", thisrec->extname);
 	  if (ioctl (mixerfd, SNDCTL_MIX_READ, &val) == -1)
 	    perror ("SNDCTL_MIX_READ(mono2)");
+#ifdef MIXF_CENTIBEL
 	  if (thisrec->flags & MIXF_CENTIBEL)
 	    {
 	      vl = val.value & mask;
 	      printf (" (currently %d.%d dB)", vl / 10, vl % 10);
 	    }
 	  else
+#endif
 	    printf (" (currently %d)", val.value & mask);
 	  break;
 
@@ -544,7 +562,9 @@ show_devinfo (int dev)
 	  break;
 
 	case MIXT_ONOFF:
+#ifdef MIXT_MUTE
 	case MIXT_MUTE:
+#endif
 	  printf ("%s ON|OFF", thisrec->extname);
 	  if (ioctl (mixerfd, SNDCTL_MIX_READ, &val) == -1)
 	    perror ("SNDCTL_MIX_READ(onoff)");
@@ -559,6 +579,7 @@ show_devinfo (int dev)
       if ((thisrec->flags & MIXF_WRITEABLE) == 0) printf(" (Read-only)");
       printf ("\n");
 
+#ifdef SNDCTL_MIX_DESCRIPTION
           if (verbose && (thisrec->flags & MIXF_DESCR))
   	    {
               oss_mixer_enuminfo ei;
@@ -573,6 +594,7 @@ show_devinfo (int dev)
 
               print_description (ei.strings);
   	    }
+#endif
     }
 }
 
@@ -610,17 +632,21 @@ dump_devinfo (int dev)
 	case MIXT_MONOPEAK:
 	  break;
 
+#ifdef MIXT_STEREOSLIDER16
 	case MIXT_STEREOSLIDER16: mask = 0xffff; shift = 16;
+#endif
 	case MIXT_STEREOSLIDER:
 	case MIXT_STEREODB:
 	  printf ("%s %s ", ossmix, extrec[i].extname);
 	  if (ioctl (mixerfd, SNDCTL_MIX_READ, &val) == -1)
 	    perror ("SNDCTL_MIX_READ(stereo2)");
+#ifdef MIXF_CENTIBEL
 	  if (thisrec->flags & MIXF_CENTIBEL)
   	    printf ("%d.%d:%d.%d\n", (val.value & mask)/10,
                     (val.value & mask)%10, ((val.value >> shift) & mask)/10,
                     ((val.value >> shift) & mask)%10);
 	  else
+#endif
   	    printf ("%d:%d\n", val.value & mask, (val.value >> shift) & mask);
 	  break;
 
@@ -646,15 +672,20 @@ dump_devinfo (int dev)
 	  break;
 
 	case MIXT_SLIDER: mask = ~0;
-	case MIXT_MONOSLIDER16: if (mask == 0xff) mask = 0xfff;
+#ifdef MIXT_MONOSLIDER16
+	case MIXT_MONOSLIDER16:
+#endif
+	  if (mask == 0xff) mask = 0xfff;
 	case MIXT_MONOSLIDER:
 	case MIXT_MONODB:
 	  printf ("%s %s ", ossmix, extrec[i].extname);
 	  if (ioctl (mixerfd, SNDCTL_MIX_READ, &val) == -1)
 	    perror ("SNDCTL_MIX_READ(mono2)");
+#ifdef MIXF_CENTIBEL
 	  if (thisrec->flags & MIXF_CENTIBEL)
   	    printf ("%d.%d\n", (val.value & mask)/10, (val.value & mask)%10);
 	  else
+#endif
   	    printf ("%d\n", val.value & mask);
 	  break;
 
@@ -677,7 +708,9 @@ dump_devinfo (int dev)
 	  break;
 
 	case MIXT_ONOFF:
+#ifdef MIXT_MUTE
 	case MIXT_MUTE:
+#endif
 	  printf ("%s %s ", ossmix, extrec[i].extname);
 	  if (ioctl (mixerfd, SNDCTL_MIX_READ, &val) == -1)
 	    perror ("SNDCTL_MIX_READ(onoff)");
@@ -808,12 +841,14 @@ change_level (int dev, const char * cname, const char * arg)
       right = left;
     }
 
+#ifdef MIXF_CENTIBEL
   if (extrec.flags & MIXF_CENTIBEL)
     {
       lefti = left * 10;
       righti = right * 10;
     }
   else
+#endif
     {
       lefti = left;
       righti = right;
@@ -830,12 +865,14 @@ change_level (int dev, const char * cname, const char * arg)
           perror ("SNDCTL_MIX_READ");
           exit (-1);
         }
-      if (extrec.type == MIXT_STEREOSLIDER16 || extrec.type == MIXT_MONOSLIDER16)
+#if defined(MIXT_MONOSLIDER16) && defined(MIXT_STEREOSLIDER16)
+if (extrec.type == MIXT_STEREOSLIDER16 || extrec.type == MIXT_MONOSLIDER16)
         {
           left = val.value & 0xffff;
           right = (val.value >> 16) & 0xffff;
         }
       else
+#endif
         {
           left = val.value & 0xff;
           right = (val.value >> 8) & 0xff;
@@ -849,12 +886,14 @@ change_level (int dev, const char * cname, const char * arg)
   if (righti < 0) righti = 0;
   switch (extrec.type)
     {
+#if defined(MIXT_MONOSLIDER16) && defined(MIXT_STEREOSLIDER16)
       case MIXT_STEREOSLIDER16:
       case MIXT_MONOSLIDER16:
         if (lefti > 0xffff) lefti = 0xffff;
         if (righti > 0xffff) righti = 0xffff;
         val.value = (lefti & 0xffff) | ((righti & 0xffff) << 16);
         break;
+#endif
       case MIXT_3D:
         if (vol < 0) vol = 0;
         if (vol > 255) vol = 255;
@@ -893,12 +932,15 @@ change_level (int dev, const char * cname, const char * arg)
   if (quiet)
     return;
 
+#if defined(MIXT_STEREOSLIDER16) && defined(MIXT_MONOSLIDER16)
   if (extrec.type == MIXT_STEREOSLIDER16 || extrec.type == MIXT_MONOSLIDER16)
     {
       lefti = val.value & 0xffff;
       righti = (val.value >> 16) & 0xffff;
     }
-  else if (extrec.type == MIXT_3D)
+  else
+#endif
+  if (extrec.type == MIXT_3D)
     {
       vol = val.value & 0x00ff;
       dist = (val.value >> 8) & 0xff;
@@ -910,12 +952,14 @@ change_level (int dev, const char * cname, const char * arg)
       righti = (val.value >> 8) & 0xff;
     }
 
+#ifdef MIXF_CENTIBEL
   if (extrec.flags & MIXF_CENTIBEL)
     {
       left = (float)lefti / 10;
       right = (float)righti / 10;
     }
   else
+#endif
     {
       left = lefti;
       right = righti;
@@ -924,7 +968,9 @@ change_level (int dev, const char * cname, const char * arg)
   switch (extrec.type)
     {
       case MIXT_ONOFF:
+#ifdef MIXT_MUTE
       case MIXT_MUTE:
+#endif
         printf ("Value of mixer control %s set to %s\n", cname,
 	        val.value ? "ON" : "OFF");
         break;
@@ -937,7 +983,9 @@ change_level (int dev, const char * cname, const char * arg)
                 show_enum (cname, &extrec, val.value));
         break;
       case MIXT_STEREOSLIDER:
+#ifdef MIXT_STEREOSLIDER16
       case MIXT_STEREOSLIDER16:
+#endif
       case MIXT_STEREODB:
       case MIXT_STEREOPEAK:
       case MIXT_STEREOVU:
@@ -989,16 +1037,20 @@ show_level (int dev, char *cname)
       exit (-1);
     }
 
+#if defined(MIXT_STEREOSLIDER16) && defined(MIXT_MONOSLIDER16)
   if (extrec.type == MIXT_MONOSLIDER16 || extrec.type == MIXT_STEREOSLIDER16)
     {
       mask = 0xffff;
       shift = 16;
     }
+#endif
 
   switch (extrec.type)
     {
       case MIXT_ONOFF:
+#ifdef MIXT_MUTE
       case MIXT_MUTE:
+#endif
         printf ("Value of mixer control %s is currently set to %s\n", cname,
 	        val.value ? "ON" : "OFF");
         break;
@@ -1007,18 +1059,22 @@ show_level (int dev, char *cname)
 	        show_enum (cname, &extrec, val.value));
         break;
       case MIXT_STEREOSLIDER:
+#ifdef MIXT_STEREOSLIDER16
       case MIXT_STEREOSLIDER16:
+#endif
       case MIXT_STEREODB:
       case MIXT_STEREOPEAK:
       case MIXT_STEREOVU:
         left = val.value & mask;
         right = (val.value >> shift) & mask;
 
+#ifdef MIXF_CENTIBEL
         if (extrec.flags & MIXF_CENTIBEL)
   	  printf
 	    ("Value of mixer control %s is currently set to %d.%d:%d.%d (dB)\n",
 	     cname, left / 10, left % 10, right / 10, right % 10);
         else
+#endif
  	  printf ("Value of mixer control %s is currently set to %d:%d\n",
 		  cname, left, right);
         break;
@@ -1036,10 +1092,12 @@ show_level (int dev, char *cname)
       default:
         left = val.value & mask;
 
+#ifdef MIXF_CENTIBEL
         if (extrec.flags & MIXF_CENTIBEL)
   	  printf ("Value of mixer control %s is currently set to %d.%d (dB)\n",
 	 	  cname, left / 10, left % 10);
         else
+#endif
   	  printf ("Value of mixer control %s is currently set to %d\n", cname,
 		  left);
         break;
