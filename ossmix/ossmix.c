@@ -81,11 +81,21 @@ load_devinfo (int dev)
      {
 	     close (mixerfd);
 
+#ifdef OSS4
 	     if ((mixerfd=open(mi.devnode, O_RDWR, 0)) == -1)
 		{
 			perror (mi.devnode);
 			exit (EXIT_FAILURE);
 		}
+#else
+		char devnode[256];
+		snprintf(devnode, 256, "/dev/mixer%d", dev);
+	     if ((mixerfd=open(devnode, O_RDWR, 0)) == -1)
+		{
+			perror (devnode);
+			exit (EXIT_FAILURE);
+		}
+#endif
      }
   nrext = mi.nrext;
 
